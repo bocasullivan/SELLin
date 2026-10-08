@@ -12,7 +12,7 @@ export function BusinessSettingsForm({
   onSave,
 }: {
   settings: BusinessSettings;
-  onSave: (settings: BusinessSettings) => void;
+  onSave: (settings: BusinessSettings) => void | Promise<void>;
 }) {
   const { t } = useLanguage();
 
@@ -60,9 +60,15 @@ export function BusinessSettingsForm({
   return (
     <form
       className="settings-card settings-spacing expanded-settings"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
-        onSave(draft);
+        if (loading) return;
+        setLoading(true);
+        try {
+          await onSave(draft);
+        } finally {
+          setLoading(false);
+        }
       }}
     >
       <section className="settings-section">

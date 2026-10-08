@@ -6,6 +6,8 @@ Workspace invoicing dengan desain monokrom, login multi-user dan penyimpanan Pos
 
 ## Database PostgreSQL
 
+Panduan testing personal online: **[docs/deployment-testing.md](docs/deployment-testing.md)** (Vercel Hobby + Neon Free). Belum dilakukan deployment otomatis; secret online harus diisi sendiri, terpisah dari database lokal.
+
 Prisma 7, skema, migrasi, dan client server-only sudah tersedia. Ikuti **[docs/database-setup.md](docs/database-setup.md)** untuk setup PostgreSQL lokal. Login/Register multi-user dan session database sudah aktif; detail pengujian serta konfigurasi ada di **[docs/authentication.md](docs/authentication.md)**. Data bisnis di Dashboard masih demo.
 
 ### Menjalankan aplikasi

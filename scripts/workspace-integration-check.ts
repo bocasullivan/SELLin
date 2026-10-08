@@ -134,6 +134,18 @@ try {
     false,
   );
   await mutate(a, "settings.save", settings);
+  const png =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=";
+  await mutate(a, "settings.image", { kind: "logo", value: png });
+  const imageUrl = (await read(a)).business.logo;
+  assert.ok(imageUrl.startsWith("/api/settings/image/logo?v="));
+  assert.equal((await fetch(`${base}${imageUrl}`)).status, 401);
+  assert.equal((await fetch(`${base}${imageUrl}`, { headers: { Cookie: b } })).status, 404);
+  const privateImage = await fetch(`${base}${imageUrl}`, { headers: { Cookie: a } });
+  assert.equal(privateImage.status, 200);
+  assert.equal(privateImage.headers.get("content-type"), "image/png");
+  assert.match(privateImage.headers.get("cache-control")!, /no-store/);
+  assert.ok((await privateImage.arrayBuffer()).byteLength > 0);
   assert.equal((await read(a)).business.bankName, "Bank");
   assert.equal((await read(b)).business.bankName, "");
   await mutate(a, "customer.delete", { id: "4101" });

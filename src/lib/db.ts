@@ -32,7 +32,12 @@ export function getDatabase() {
     throw new Error("DATABASE_URL belum dikonfigurasi. Ikuti docs/database-setup.md.");
   }
 
-  const adapter = new PrismaPg({ connectionString });
+  const adapter = new PrismaPg({
+    connectionString,
+    max: 3,
+    connectionTimeoutMillis: 15_000,
+    idleTimeoutMillis: 10_000,
+  });
   const database = new PrismaClient({ adapter });
   if (!database.accountCustomer) {
     void database.$disconnect().catch(() => undefined);

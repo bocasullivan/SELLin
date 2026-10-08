@@ -3,6 +3,7 @@ import { allowedOrigin } from "@/lib/auth-security";
 import { getDatabase } from "@/lib/db";
 import { loadWorkspace } from "@/lib/workspace-data";
 import { customerData, invoiceData, text, WorkspaceError } from "@/lib/workspace-validation";
+import { decodePrivateImage } from "@/lib/private-image";
 
 export const runtime = "nodejs";
 const json = (data: object, status = 200) =>
@@ -22,14 +23,15 @@ export async function POST(request: Request) {
     if (!request.headers.get("content-type")?.startsWith("application/json"))
       throw new WorkspaceError("Format permintaan tidak valid.");
     const raw = await request.text();
-    if (raw.length > 6_000_000) throw new WorkspaceError("Permintaan terlalu besar.");
+    if (Buffer.byteLength(raw, "utf8") > 3_000_000)
+      throw new WorkspaceError("Permintaan terlalu besar.");
     const input = JSON.parse(raw);
     if (!input || typeof input !== "object" || !input.data || typeof input.data !== "object")
       throw new WorkspaceError("Data tidak valid.");
     const { action, data } = input;
     const userId = session.userId;
     const db = getDatabase();
-    // Serialize mutations per account: protects paid locks, counters and item replacement.
+    // Serialize mutations per account: protects counters and item replacement.
     await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${userId}::uuid FOR UPDATE`;
       if (action === "customer.save") {
@@ -117,6 +119,25 @@ export async function POST(request: Request) {
             });
           }
         }
+      } else if (action === "settings.image") {
+        const kind = data.kind;
+        if (kind !== "logo" && kind !== "signature")
+          throw new WorkspaceError("Jenis gambar tidak valid.");
+        const value = text(data, "value", 2_800_000);
+        if (value) {
+          try {
+            decodePrivateImage(value);
+          } catch (error) {
+            throw new WorkspaceError(
+              error instanceof Error ? error.message : "Gambar tidak valid.",
+            );
+          }
+        }
+        await tx.accountSettings.upsert({
+          where: { userId },
+          create: { userId, [kind]: value },
+          update: { [kind]: value },
+        });
       } else if (action === "settings.save") {
         const values = {
           name: text(data, "name", 100, true),
@@ -127,24 +148,7 @@ export async function POST(request: Request) {
           accountName: text(data, "accountName", 150),
           accountNumber: text(data, "accountNumber", 60),
           invoiceAuthor: text(data, "invoiceAuthor", 150),
-          logo: text(data, "logo", 2_800_000),
-          signature: text(data, "signature", 2_800_000),
         };
-        for (const image of [values.logo, values.signature]) {
-          if (!image) continue;
-          const match = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(image);
-          if (!match) throw new WorkspaceError("Gambar harus PNG, JPG, atau WebP.");
-          const bytes = Buffer.from(match[2], "base64");
-          const valid =
-            match[1] === "png"
-              ? bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-              : match[1] === "jpeg"
-                ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
-                : bytes.toString("ascii", 0, 4) === "RIFF" &&
-                  bytes.toString("ascii", 8, 12) === "WEBP";
-          if (!valid || bytes.length > 2 * 1024 * 1024)
-            throw new WorkspaceError("Gambar tidak valid atau melebihi 2 MB.");
-        }
         await tx.accountSettings.upsert({
           where: { userId },
           create: { userId, ...values },

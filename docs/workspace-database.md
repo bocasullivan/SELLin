@@ -12,7 +12,7 @@ Dashboard, Customer, Invoice, dan Settings kini menggunakan tabel `Account*` yan
 - Semua invoice, termasuk lunas, dapat diedit atau dihapus oleh pemilik akun. Status lunas juga dapat dikoreksi kembali menjadi belum dibayar; hapus tetap memerlukan konfirmasi di UI.
 - Snapshot nama/alamat/kontak customer disimpan dalam invoice. Mengedit atau menghapus customer tidak mengubah invoice lama.
 - Harga harus Rupiah bulat, qty bilangan bulat positif. Total dihitung di server, tidak dipercaya dari payload; nilainya harus aman untuk representasi angka UI.
-- Logo/tanda tangan raster maksimal 2 MB per gambar disimpan sebagai data URL dalam tabel settings privat. MIME, signature file dan batas ukuran diperiksa server; preview/print hanya tersedia dalam workspace yang terautentikasi. Tidak ada direktori upload publik.
+- Logo/tanda tangan raster maksimal 2 MB per gambar disimpan sebagai data URL dalam tabel settings privat. Upload dilakukan satu gambar per request. Respons workspace hanya memuat URL endpoint gambar privat, dengan pemeriksaan session dan respons binary `no-store`. MIME, signature file dan batas ukuran diperiksa server. Tidak ada direktori upload publik.
 
 ## Pengujian manual
 

@@ -2,6 +2,7 @@ import "server-only";
 import { getDatabase } from "@/lib/db";
 import type { Invoice } from "@/lib/invoice";
 import { initialBusiness } from "@/lib/business";
+import { privateImageUrl } from "@/lib/private-image";
 
 export async function loadWorkspace(userId: string) {
   const db = getDatabase();
@@ -57,8 +58,10 @@ export async function loadWorkspace(userId: string) {
           accountName: settings.accountName,
           accountNumber: settings.accountNumber,
           invoiceAuthor: settings.invoiceAuthor,
-          logo: settings.logo,
-          signature: settings.signature,
+          logo: settings.logo ? privateImageUrl("logo", settings.updatedAt.toISOString()) : "",
+          signature: settings.signature
+            ? privateImageUrl("signature", settings.updatedAt.toISOString())
+            : "",
         }
       : { ...initialBusiness, name: "" },
     usedCustomerIds: Array.from({ length: (counter?.lastCode ?? 4100) - 4100 }, (_, index) =>

@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "SELLin — workspace invoicing pribadi",
   "private": true,
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
@@ -59,5 +62,8 @@
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "mysql2": "^3.24.5"
   }
 }

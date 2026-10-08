@@ -632,7 +632,12 @@ export function Workspace({
                 <BusinessSettingsForm
                   settings={business}
                   onSave={async (settings) => {
-                    if (await mutate("settings.save", settings))
+                    for (const kind of ["logo", "signature"] as const) {
+                      if (settings[kind] === business[kind]) continue;
+                      if (!(await mutate("settings.image", { kind, value: settings[kind] })))
+                        return;
+                    }
+                    if (await mutate("settings.save", { ...settings, logo: "", signature: "" }))
                       setNotice("Pengaturan berhasil disimpan.");
                   }}
                 />
