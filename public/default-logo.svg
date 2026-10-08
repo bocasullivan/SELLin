@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="150" height="150" viewBox="0 0 150 150">
+  <rect
+    x="20"
+    y="14"
+    width="110"
+    height="110"
+    rx="28"
+    fill="white"
+    stroke="#202124"
+    stroke-width="3"
+  />
+  <path d="M48 45h54v17H67v10h35v34H48V89h35V79H48z" fill="#202124" />
+  <text
+    x="75"
+    y="145"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="16"
+    font-weight="700"
+    letter-spacing="3"
+  >
+    SELLin
+  </text>
+</svg>

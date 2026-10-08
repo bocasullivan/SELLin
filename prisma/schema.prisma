@@ -1,0 +1,237 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PAID
+}
+
+// Legacy foundation; retained to preserve any existing owner records.
+model Owner {
+  id           String   @id @default("owner")
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique @db.VarChar(254)
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sessions     Session[]
+  customers    AccountCustomer[]
+  invoices     AccountInvoice[]
+  settings     AccountSettings?
+  counter      AccountCounter?
+}
+
+// Tenant-aware business tables. Legacy global tables remain untouched.
+model AccountCounter {
+  userId   String @id @db.Uuid
+  lastCode Int    @default(4100)
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AccountCustomer {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  code      String    @db.VarChar(4)
+  name      String    @db.VarChar(100)
+  address   String    @default("") @db.VarChar(500)
+  city      String    @default("") @db.VarChar(100)
+  contact   String    @default("") @db.VarChar(150)
+  notes     String    @default("") @db.VarChar(1000)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoices  AccountInvoice[]
+  sequences AccountSequence[]
+
+  @@unique([userId, code])
+  @@unique([userId, id])
+}
+
+model AccountSequence {
+  userId     String @db.Uuid
+  customerId String @db.Uuid
+  year       Int
+  lastNumber Int    @default(0)
+  customer   AccountCustomer @relation(fields: [userId, customerId], references: [userId, id], onDelete: Restrict)
+
+  @@id([userId, customerId, year])
+}
+
+model AccountInvoice {
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @db.Uuid
+  customerId      String        @db.Uuid
+  number          String        @db.VarChar(16)
+  year            Int
+  sequence        Int
+  issuedAt        DateTime      @db.Date
+  status          InvoiceStatus @default(UNPAID)
+  customerCode    String        @db.VarChar(4)
+  customerName    String        @db.VarChar(100)
+  customerAddress String        @db.VarChar(700)
+  customerContact String        @db.VarChar(150)
+  total           Decimal       @db.Decimal(20, 0)
+  paidAt          DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customer        AccountCustomer @relation(fields: [userId, customerId], references: [userId, id], onDelete: Restrict)
+  items           AccountItem[]
+
+  @@unique([userId, number])
+  @@unique([userId, customerId, year, sequence])
+  @@index([userId, deletedAt, issuedAt])
+}
+
+model AccountItem {
+  id          String @id @default(uuid()) @db.Uuid
+  invoiceId   String @db.Uuid
+  position    Int
+  device      String @default("") @db.VarChar(150)
+  description String @db.VarChar(200)
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(20, 0)
+  lineTotal   Decimal @db.Decimal(20, 0)
+  invoice     AccountInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@unique([invoiceId, position])
+}
+
+model AccountSettings {
+  userId        String @id @db.Uuid
+  name          String @default("") @db.VarChar(100)
+  email         String @default("") @db.VarChar(150)
+  address       String @default("") @db.VarChar(500)
+  phone         String @default("") @db.VarChar(40)
+  bankName      String @default("") @db.VarChar(80)
+  accountName   String @default("") @db.VarChar(150)
+  accountNumber String @default("") @db.VarChar(60)
+  invoiceAuthor String @default("") @db.VarChar(150)
+  // Validated raster data URLs stored privately; no public upload directory.
+  logo          String @default("") @db.Text
+  signature     String @default("") @db.Text
+  updatedAt     DateTime @updatedAt
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id           String   @id @default(uuid()) @db.Uuid
+  tokenHash    String   @unique @db.VarChar(64)
+  userId       String   @db.Uuid
+  expiresAt    DateTime
+  lastActiveAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+model AuthAttempt {
+  key         String   @id @db.VarChar(64)
+  count       Int      @default(1)
+  windowStart DateTime @default(now())
+}
+
+// Never decrement this counter when a customer is deleted.
+model CustomerCounter {
+  id       String @id @default("customer")
+  lastCode Int    @default(4100)
+}
+
+model Customer {
+  id        String    @id @default(uuid()) @db.Uuid
+  code      String    @unique @db.VarChar(4)
+  name      String    @db.VarChar(100)
+  address   String    @default("") @db.VarChar(500)
+  city      String    @default("") @db.VarChar(100)
+  contact   String    @default("") @db.VarChar(150)
+  notes     String    @default("") @db.VarChar(1000)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  invoices  Invoice[]
+  sequences InvoiceSequence[]
+
+  @@index([deletedAt, name])
+}
+
+// Allocate customer/year invoice sequences atomically in a transaction.
+model InvoiceSequence {
+  customerId String   @db.Uuid
+  year       Int
+  lastNumber Int      @default(0)
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@id([customerId, year])
+}
+
+model Invoice {
+  id              String        @id @default(uuid()) @db.Uuid
+  number          String        @unique @db.VarChar(16)
+  customerId      String        @db.Uuid
+  year            Int
+  sequence        Int
+  issuedAt        DateTime      @db.Date
+  status          InvoiceStatus @default(UNPAID)
+  // Immutable-at-render snapshots, independent of subsequent customer edits.
+  customerCode    String        @db.VarChar(4)
+  customerName    String        @db.VarChar(100)
+  customerAddress String        @db.VarChar(700)
+  customerContact String        @db.VarChar(150)
+  subtotal        Decimal       @db.Decimal(20, 0)
+  total           Decimal       @db.Decimal(20, 0)
+  paidAt          DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  customer        Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items           InvoiceItem[]
+
+  @@unique([customerId, year, sequence])
+  @@index([deletedAt, status, issuedAt])
+}
+
+model InvoiceItem {
+  id          String  @id @default(uuid()) @db.Uuid
+  invoiceId   String  @db.Uuid
+  position    Int
+  device      String  @default("") @db.VarChar(150)
+  description String  @db.VarChar(200)
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(20, 0)
+  lineTotal   Decimal @db.Decimal(20, 0)
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([invoiceId, position])
+}
+
+model BusinessSettings {
+  id            String   @id @default("business")
+  name          String   @default("") @db.VarChar(100)
+  email         String   @default("") @db.VarChar(150)
+  address       String   @default("") @db.VarChar(500)
+  phone         String   @default("") @db.VarChar(40)
+  bankName      String   @default("") @db.VarChar(80)
+  accountName   String   @default("") @db.VarChar(150)
+  accountNumber String   @default("") @db.VarChar(60)
+  invoiceAuthor String   @default("") @db.VarChar(150)
+  // Private storage keys, not public URLs or raw image blobs.
+  logoKey       String?
+  signatureKey  String?
+  updatedAt     DateTime @updatedAt
+}

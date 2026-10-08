@@ -1,0 +1,63 @@
+{
+  "name": "sellin",
+  "version": "1.0.0",
+  "description": "SELLin — workspace invoicing pribadi",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1",
+    "lint": "eslint .",
+    "db:generate": "prisma generate",
+    "db:validate": "prisma validate",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:check": "tsx scripts/database-check.ts",
+    "postinstall": "prisma generate",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"scripts/**/*.ts\" \"prisma.config.ts\" \"public/**/*.svg\" \"*.{json,mjs}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"scripts/**/*.ts\" \"prisma.config.ts\" \"public/**/*.svg\" \"*.{json,mjs}\"",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bocasullivan/SELLin.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/bocasullivan/SELLin/issues"
+  },
+  "homepage": "https://github.com/bocasullivan/SELLin#readme",
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "@radix-ui/react-slot": "^1.4.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "dotenv": "^18.0.6",
+    "lucide-react": "^1.53.0",
+    "next": "^16.4.0",
+    "pg": "^8.23.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "server-only": "^0.0.1",
+    "tailwind-merge": "^3.7.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^26.6.4",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.4.0",
+    "prettier": "^3.9.9",
+    "prisma": "^7.10.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3"
+  }
+}
