@@ -40,6 +40,9 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
       return english ? "This email is already registered." : "Email sudah terdaftar.";
     if (code === "credentials")
       return english ? "Incorrect email or password." : "Email atau kata sandi salah.";
+    if (code === "notFound")
+      return english ? "This email is not registered." : "Email tidak terdaftar.";
+    if (code === "incorrect") return english ? "Incorrect password." : "Password salah.";
     if (code === "long")
       return english ? "Use no more than 128 characters." : "Kata sandi maksimal 128 karakter.";
     if (field === "email")

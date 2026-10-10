@@ -92,7 +92,8 @@ export async function POST(request: Request, context: { params: Promise<{ action
     // Do equivalent password work for unknown emails; do not expose account existence.
     const dummy = "scrypt:00000000000000000000000000000000:" + "0".repeat(128);
     const valid = await verifyPassword(password, user?.passwordHash ?? dummy);
-    if (!user || !valid) return reply({ errors: { password: "credentials" } }, 401);
+    if (!user) return reply({ errors: { email: "notFound" } }, 401);
+    if (!valid) return reply({ errors: { password: "incorrect" } }, 401);
 
     const token = randomBytes(32).toString("hex");
     const expiresAt = sessionExpiry();

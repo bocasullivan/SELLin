@@ -3,9 +3,25 @@ import { getDatabase } from "@/lib/db";
 import type { Invoice } from "@/lib/invoice";
 import { initialBusiness } from "@/lib/business";
 import { privateImageUrl } from "@/lib/private-image";
+import type { RecordInfo } from "@/lib/record-info";
 
 export async function loadWorkspace(userId: string) {
   const db = getDatabase();
+  // Only resolve the authenticated owner's identity; never expose other accounts.
+  const owner = await db.user.findUnique({ where: { id: userId }, select: { email: true } });
+  const recordInfo = (record: {
+    version: number;
+    createdByUserId: string;
+    updatedByUserId: string;
+    createdAt: Date;
+    updatedAt: Date;
+  }): RecordInfo => ({
+    version: record.version,
+    createdBy: record.createdByUserId === userId ? (owner?.email ?? "—") : "—",
+    createdAt: record.createdAt.toISOString(),
+    updatedBy: record.updatedByUserId === userId ? (owner?.email ?? "—") : "—",
+    updatedAt: record.updatedAt.toISOString(),
+  });
   const [customers, records, settings, counter] = await Promise.all([
     db.accountCustomer.findMany({ where: { userId, deletedAt: null }, orderBy: { code: "asc" } }),
     db.accountInvoice.findMany({
@@ -17,6 +33,7 @@ export async function loadWorkspace(userId: string) {
     db.accountCounter.findUnique({ where: { userId } }),
   ]);
   const invoices: Invoice[] = records.map((record) => ({
+    info: recordInfo(record),
     id: record.id,
     number: record.number,
     customerId: record.customerCode,
@@ -38,13 +55,14 @@ export async function loadWorkspace(userId: string) {
     notes: "",
   }));
   return {
-    customers: customers.map(({ code, name, address, city, contact, notes }) => ({
-      id: code,
-      name,
-      address,
-      city,
-      contact,
-      notes,
+    customers: customers.map((record) => ({
+      id: record.code,
+      name: record.name,
+      address: record.address,
+      city: record.city,
+      contact: record.contact,
+      notes: record.notes,
+      info: recordInfo(record),
     })),
     invoices: invoices.filter((_, index) => !records[index].deletedAt),
     numberingInvoices: invoices,

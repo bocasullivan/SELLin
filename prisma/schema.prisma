@@ -51,6 +51,9 @@ model AccountCustomer {
   contact   String    @default("") @db.VarChar(150)
   notes     String    @default("") @db.VarChar(1000)
   deletedAt DateTime?
+  version   Int      @default(1)
+  createdByUserId String @db.Uuid
+  updatedByUserId String @db.Uuid
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -87,6 +90,9 @@ model AccountInvoice {
   total           Decimal       @db.Decimal(20, 0)
   paidAt          DateTime?
   deletedAt       DateTime?
+  version         Int           @default(1)
+  createdByUserId String        @db.Uuid
+  updatedByUserId String        @db.Uuid
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -125,8 +131,28 @@ model AccountSettings {
   // Validated raster data URLs stored privately; no public upload directory.
   logo          String @default("") @db.Text
   signature     String @default("") @db.Text
+  version       Int      @default(1)
+  createdByUserId String @db.Uuid
+  updatedByUserId String @db.Uuid
+  createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditTrail {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  actorUserId String   @db.Uuid
+  entityType  String   @db.VarChar(40)
+  entityId    String   @db.Uuid
+  version     Int
+  action      String   @db.VarChar(20)
+  changes     Json
+  reason      String?  @db.VarChar(500)
+  createdAt   DateTime @default(now())
+
+  @@index([userId, entityType, entityId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model Session {

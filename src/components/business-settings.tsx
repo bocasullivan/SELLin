@@ -74,14 +74,20 @@ export function BusinessSettingsForm({
       <section className="settings-section">
         <h2>{t("Logo invoice")}</h2>
         <p>{t("Ditampilkan di kanan atas invoice. PNG, JPG, atau WebP, maksimal 2 MB.")}</p>
-        <label htmlFor="logo-file" className="signature-upload-label">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={loading}
+          onClick={() => logoRef.current?.click()}
+        >
           <Upload size={16} />
           {t("Unggah logo")}
-        </label>
+        </Button>
         <input
           id="logo-file"
           ref={logoRef}
           type="file"
+          hidden
           accept="image/png,image/jpeg,image/webp"
           disabled={loading}
           onChange={(e) => void signature(e.target.files?.[0], "logo")}

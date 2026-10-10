@@ -21,6 +21,70 @@
   display: flex;
   flex-direction: column;
 }
+.notice.workspace-toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  box-shadow: 0 8px 28px #0002;
+}
+
+@media print {
+  .workspace-toast {
+    display: none !important;
+  }
+}
+
+.record-info {
+  margin: 0;
+  padding: 8px 24px 24px;
+}
+
+.record-info > div {
+  display: grid;
+  grid-template-columns: minmax(90px, 110px) minmax(0, 1fr);
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.record-info dt {
+  font-weight: 600;
+}
+
+.record-info dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.record-info-backdrop {
+  align-items: center;
+}
+
+.record-info-dialog {
+  width: 520px;
+  max-height: calc(100dvh - 70px);
+  overflow-y: auto;
+  background: #fff;
+}
+
+.record-info-dialog .preview-toolbar strong {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.record-info-dialog .preview-actions {
+  flex-shrink: 0;
+}
+
+.record-info > div:last-child {
+  border-bottom: none;
+}
+
 .auth-header {
   display: flex;
   align-items: center;

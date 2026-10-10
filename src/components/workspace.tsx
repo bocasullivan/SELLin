@@ -10,12 +10,14 @@ import { InvoiceForm } from "@/components/invoice-form";
 import { InvoiceDocument } from "@/components/invoice-document";
 import { BusinessSettingsForm } from "@/components/business-settings";
 import type { BusinessSettings } from "@/lib/business";
+import type { RecordInfo } from "@/lib/record-info";
 import {
   ArrowDownLeft,
   ArrowUpRight,
   Check,
   Command,
   FileText,
+  Info,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -41,6 +43,7 @@ import {
 
 type View = "Dashboard" | "Pelanggan" | "Pengaturan";
 export type Customer = {
+  info?: RecordInfo;
   id: string;
   name: string;
   address: string;
@@ -108,6 +111,7 @@ export function Workspace({
   const [filter, setFilter] = useState("Semua invoice");
   const [editor, setEditor] = useState<Invoice | null>(null);
   const [preview, setPreview] = useState<Invoice | null>(null);
+  const [infoTarget, setInfoTarget] = useState<{ title: string; info?: RecordInfo } | null>(null);
   const [customerEditor, setCustomerEditor] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Invoice | null>(null);
   const [mobileNav, setMobileNav] = useState(false);
@@ -117,6 +121,12 @@ export function Workspace({
   const profileRef = useRef<HTMLDivElement>(null);
   const profileButton = useRef<HTMLButtonElement>(null);
   const navButton = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 2000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   useEffect(() => {
     function close(event: PointerEvent) {
@@ -393,7 +403,7 @@ export function Workspace({
         <main>
           <SessionActivity />
           {notice && (
-            <div className="notice" role="status">
+            <div className="notice workspace-toast" role="status" aria-live="polite">
               <span>{t(notice)}</span>
               <button
                 className="icon-button"
@@ -536,14 +546,27 @@ export function Workspace({
                                 </div>
                               </td>
                               <td>
-                                <button
-                                  className="icon-button row-action pdf-preview-action"
-                                  aria-label={`${t("Buka PDF preview")} ${invoice.number}`}
-                                  title={t("Preview PDF invoice")}
-                                  onClick={() => setPreview(invoice)}
-                                >
-                                  <FileText size={18} />
-                                </button>
+                                <div className="invoice-row-actions">
+                                  <button
+                                    className="icon-button row-action pdf-preview-action"
+                                    aria-label={`${t("Buka PDF preview")} ${invoice.number}`}
+                                    title={t("Preview PDF invoice")}
+                                    onClick={() => setPreview(invoice)}
+                                  >
+                                    <FileText size={18} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="icon-button row-action"
+                                    title={`Info ${invoice.number}`}
+                                    aria-label={`Info ${invoice.number}`}
+                                    onClick={() =>
+                                      setInfoTarget({ title: invoice.number, info: invoice.info })
+                                    }
+                                  >
+                                    <Info size={18} />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -598,6 +621,20 @@ export function Workspace({
                               <td>{customer.notes || "—"}</td>
                               <td>
                                 <div className="invoice-row-actions">
+                                  <button
+                                    type="button"
+                                    className="icon-button row-action"
+                                    title={`Info customer ${customer.id}`}
+                                    aria-label={`Info customer ${customer.id}`}
+                                    onClick={() =>
+                                      setInfoTarget({
+                                        title: `${customer.id} — ${customer.name}`,
+                                        info: customer.info,
+                                      })
+                                    }
+                                  >
+                                    <Info size={15} />
+                                  </button>
                                   <button
                                     className="icon-button row-action edit-row-action"
                                     aria-label={`${t("Edit Customer")} ${customer.id}`}
@@ -703,6 +740,32 @@ export function Workspace({
               {t("Simpan Customer")}
             </Button>
           </form>
+        </Dialog>
+      )}
+      {infoTarget && (
+        <Dialog title={`Info — ${infoTarget.title}`} onClose={() => setInfoTarget(null)} info>
+          {infoTarget.info ? (
+            <dl className="record-info">
+              {[
+                ["Version", String(infoTarget.info.version)],
+                ["UserCreate", infoTarget.info.createdBy],
+                ["TglCreate", formatInfoDate(infoTarget.info.createdAt, language)],
+                ["UserModify", infoTarget.info.updatedBy],
+                ["TglModify", formatInfoDate(infoTarget.info.updatedAt, language)],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p>
+              {language === "en"
+                ? "Record information is unavailable. Refresh the page and try again."
+                : "Informasi data belum tersedia. Refresh halaman dan coba lagi."}
+            </p>
+          )}
         </Dialog>
       )}
       {preview && (
@@ -817,18 +880,30 @@ function Stat({
     </article>
   );
 }
+function formatInfoDate(value: string, language: "id" | "en") {
+  return (
+    new Intl.DateTimeFormat(language === "en" ? "en-GB" : "id-ID", {
+      dateStyle: "medium",
+      timeStyle: "medium",
+      timeZone: "Asia/Jakarta",
+    }).format(new Date(value)) + " WIB"
+  );
+}
+
 function Dialog({
   title,
   onClose,
   children,
   actions,
   wide = false,
+  info = false,
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
   actions?: React.ReactNode;
   wide?: boolean;
+  info?: boolean;
 }) {
   const { t } = useLanguage();
 
@@ -868,14 +943,14 @@ function Dialog({
   }, [onClose]);
   return (
     <div
-      className="modal-backdrop"
+      className={`modal-backdrop${info ? " record-info-backdrop" : ""}`}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <section
         ref={ref}
-        className={`preview-dialog ${wide ? "" : "customer-dialog"}`}
+        className={`preview-dialog ${wide ? "" : "customer-dialog"}${info ? " record-info-dialog" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

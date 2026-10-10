@@ -1,3 +1,5 @@
+import type { RecordInfo } from "./record-info";
+
 export type InvoiceStatus = "Draft" | "Belum dibayar" | "Lunas";
 export type InvoiceItem = {
   id: string;
@@ -7,6 +9,7 @@ export type InvoiceItem = {
   price: number;
 };
 export type Invoice = {
+  info?: RecordInfo;
   id: string;
   number: string;
   customerId?: string;
