@@ -1696,7 +1696,7 @@ input[readonly] {
 @media print {
   @page {
     size: A4;
-    margin: 15mm;
+    margin: 0;
   }
   body {
     background: #fff;
@@ -1727,7 +1727,7 @@ input[readonly] {
   }
   .invoice-document {
     border: none;
-    margin: 0;
+    margin: 15mm;
     padding: 0;
   }
   .document-table tr {
@@ -2420,7 +2420,7 @@ select:focus-visible {
     min-height: 267mm;
     width: 180mm;
     padding: 0;
-    margin: 0;
+    margin: 15mm;
     font-family: "Segoe UI", Arial, sans-serif;
   }
   .reference-header h2 {

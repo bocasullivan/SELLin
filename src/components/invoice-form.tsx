@@ -96,6 +96,7 @@ function CustomerLookup({
         />
         <button
           type="button"
+          tabIndex={-1}
           aria-label={t(field === "id" ? "Buka pilihan ID customer" : "Buka pilihan nama customer")}
           onClick={() => {
             setQuery(null);
@@ -152,6 +153,8 @@ export function InvoiceForm({
   const { t } = useLanguage();
 
   const [data, setData] = useState(invoice);
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
+  const [focusItemId, setFocusItemId] = useState<string | null>(null);
   const [customerId, setCustomerId] = useState(invoice.customerId ?? "");
   const selected = customers.find((c) => c.id === customerId);
   const [error, setError] = useState("");
@@ -193,6 +196,25 @@ export function InvoiceForm({
       ...previous,
       items: previous.items.map((item, n) => (n === index ? { ...item, ...changes } : item)),
     }));
+  }
+  function addItem() {
+    const id = crypto.randomUUID();
+    setFocusItemId(id);
+    setData((previous) => ({
+      ...previous,
+      items: [...previous.items, { id, device: "", description: "", quantity: 1, price: 0 }],
+    }));
+  }
+  function handlePriceChange(index: number, item: InvoiceItem, value: string) {
+    setPriceDrafts((previous) => ({ ...previous, [item.id]: value }));
+    if (value !== "") updateItem(index, { price: Number(value) });
+  }
+  function handlePriceBlur(item: InvoiceItem) {
+    setPriceDrafts((previous) => {
+      const next = { ...previous };
+      delete next[item.id];
+      return next;
+    });
   }
   function validCustomer() {
     if (!selected || !number) {
@@ -283,9 +305,15 @@ export function InvoiceForm({
               <label>
                 {t("Device")}
                 <input
+                  ref={(element) => {
+                    if (element && item.id === focusItemId) element.focus();
+                  }}
                   maxLength={150}
                   placeholder={t("Device / pemilik")}
                   value={item.device ?? ""}
+                  onFocus={() => {
+                    if (focusItemId === item.id) setFocusItemId(null);
+                  }}
                   onChange={(e) => updateItem(index, { device: e.target.value })}
                 />
               </label>
@@ -319,8 +347,9 @@ export function InvoiceForm({
                   min="0"
                   max="100000000000"
                   step="1"
-                  value={item.price}
-                  onChange={(e) => updateItem(index, { price: Number(e.target.value) })}
+                  value={priceDrafts[item.id] ?? item.price}
+                  onChange={(e) => handlePriceChange(index, item, e.target.value)}
+                  onBlur={() => handlePriceBlur(item)}
                 />
               </label>
               <button
@@ -328,6 +357,7 @@ export function InvoiceForm({
                 className="icon-button delete-item"
                 aria-label={`${t("Hapus item")} ${index + 1}`}
                 disabled={data.items.length === 1}
+                tabIndex={-1}
                 onClick={() =>
                   setData({ ...data, items: data.items.filter((i) => i.id !== item.id) })
                 }
@@ -336,19 +366,7 @@ export function InvoiceForm({
               </button>
             </div>
           ))}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              setData({
-                ...data,
-                items: [
-                  ...data.items,
-                  { id: crypto.randomUUID(), device: "", description: "", quantity: 1, price: 0 },
-                ],
-              })
-            }
-          >
+          <Button type="button" variant="outline" onClick={addItem}>
             <Plus size={16} />
             {t("Tambah item")}
           </Button>
