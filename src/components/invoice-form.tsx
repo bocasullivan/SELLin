@@ -165,15 +165,15 @@ export function InvoiceForm({
   if (selected && data.issued) {
     try {
       number =
-        editing &&
-        selected.id === invoice.customerId &&
-        data.issued.slice(0, 4) === invoice.issued.slice(0, 4)
+        // REVISI : Nomor invoice tersimpan tidak berubah saat tanggal/customer dikoreksi.
+        editing
           ? invoice.number
           : nextInvoiceNumber(
               invoices.filter((i) => i.id !== data.id),
               selected.id,
               data.issued,
             );
+      // REVISI END
     } catch (err) {
       numberingError = err instanceof Error ? err.message : "Nomor invoice tidak tersedia.";
     }

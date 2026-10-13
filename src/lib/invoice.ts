@@ -59,21 +59,18 @@ export function nextCustomerId(ids: string[]) {
   return String(last + 1);
 }
 export function nextInvoiceNumber(invoices: Invoice[], customerId: string, issued: string) {
-  if (!/^41(?:0[1-9]|[1-9]\d)$/.test(customerId)) throw new Error("Pilih customer yang valid.");
+  // REVISI : Perkiraan urutan terbesar per tahun tanpa tergantung customer.
+  if (!customerId) throw new Error("Pilih customer yang valid.");
   const year = issued.slice(0, 4);
-  const prefix = `INV${year.slice(-2)}${customerId}`;
+  const prefix = `INV${year.slice(-2)}`;
   const sequence =
     Math.max(
       0,
       ...invoices
-        .filter(
-          (i) =>
-            i.customerId === customerId &&
-            i.issued.slice(0, 4) === year &&
-            i.number.startsWith(prefix),
-        )
+        .filter((i) => i.number.startsWith(prefix) && /^INV\d{8}$/.test(i.number))
         .map((i) => Number(i.number.slice(prefix.length)) || 0),
     ) + 1;
-  if (sequence > 99999) throw new Error("Nomor urut invoice customer tahun ini sudah habis.");
-  return `${prefix}${String(sequence).padStart(5, "0")}`;
+  if (sequence > 999999) throw new Error("Nomor urut invoice tahun ini sudah habis.");
+  return `${prefix}${String(sequence).padStart(6, "0")}`;
+  // REVISI END
 }

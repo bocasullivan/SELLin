@@ -24,16 +24,18 @@ test("ID customer otomatis dan batas 4199", () => {
   assert.equal(nextCustomerId(["4101", "4102", "4103", "4104"]), "4105");
   assert.throws(() => nextCustomerId(["4199"]));
 });
-test("nomor invoice berurutan per customer per tahun", () => {
+// REVISI : Uji nomor tahunan gabungan dan penghapusan nomor akhir.
+test("nomor invoice per tahun gabungan semua customer", () => {
   const invoices = [
-    { customerId: "4102", issued: "2026-01-01", number: "INV26410200005" },
-    { customerId: "4101", issued: "2026-01-01", number: "INV26410100020" },
+    { customerId: "C00001", issued: "2026-01-01", number: "INV26000005" },
+    { customerId: "OTHER", issued: "2026-01-01", number: "INV26000020" },
   ] as Invoice[];
-  assert.equal(nextInvoiceNumber(invoices, "4102", "2026-10-08"), "INV26410200006");
-  assert.equal(nextInvoiceNumber(invoices, "4102", "2027-01-01"), "INV27410200001");
-  assert.equal(nextInvoiceNumber(invoices, "4103", "2026-10-08"), "INV26410300001");
-  assert.throws(() => nextInvoiceNumber(invoices, "4100", "2026-01-01"));
+  assert.equal(nextInvoiceNumber(invoices, "C00001", "2026-10-08"), "INV26000021");
+  assert.equal(nextInvoiceNumber(invoices, "C00001", "2027-01-01"), "INV27000001");
+  assert.equal(nextInvoiceNumber(invoices.slice(0, 1), "OTHER", "2026-01-01"), "INV26000006");
+  assert.throws(() => nextInvoiceNumber(invoices, "", "2026-01-01"));
 });
+// REVISI END
 test("hanya tagihan belum dibayar yang dapat terlambat", () => {
   const base = { due: "2026-10-01", status: "Belum dibayar" as const };
   assert.equal(isOverdue(base as Parameters<typeof isOverdue>[0], "2026-10-08"), true);

@@ -51,7 +51,7 @@ export async function POST(request: Request, context: { params: Promise<{ action
         ...sessionCookieOptions,
         expires: expiresAt,
       });
-      return reply({ ok: true });
+      return reply({ ok: true, userEmail: session.user.email });
     }
 
     // Bound the request before parsing or hashing untrusted passwords.
@@ -88,6 +88,8 @@ export async function POST(request: Request, context: { params: Promise<{ action
       // Registration saves the account; the user then signs in on the login page.
       return reply({ ok: true }, 201);
     }
+    // Tabs in the same browser share cookies: do not replace an active account.
+    if (await getSession()) return reply({ ok: true });
     user = await database.user.findUnique({ where: { email } });
     // Do equivalent password work for unknown emails; do not expose account existence.
     const dummy = "scrypt:00000000000000000000000000000000:" + "0".repeat(128);

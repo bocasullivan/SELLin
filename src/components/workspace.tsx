@@ -11,6 +11,7 @@ import { InvoiceDocument } from "@/components/invoice-document";
 import { BusinessSettingsForm } from "@/components/business-settings";
 import type { BusinessSettings } from "@/lib/business";
 import type { RecordInfo } from "@/lib/record-info";
+import { publishAuthChange } from "@/lib/auth-sync";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -32,14 +33,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  calculateTotals,
-  currency,
-  dateLabel,
-  localDate,
-  nextCustomerId,
-  type Invoice,
-} from "@/lib/invoice";
+import { calculateTotals, currency, dateLabel, localDate, type Invoice } from "@/lib/invoice";
 
 type View = "Dashboard" | "Pelanggan" | "Pengaturan";
 export type Customer = {
@@ -58,6 +52,9 @@ const navigation = [
 ] as const;
 const total = (i: Invoice) => calculateTotals(i.items, i.discount, i.tax).total;
 type WorkspaceData = {
+  // REVISI : Tenggat Undo dari server untuk notifikasi floating.
+  pendingDeletes: { id: string; number: string; deadline: string }[];
+  // REVISI END
   customers: Customer[];
   invoices: Invoice[];
   numberingInvoices: Invoice[];
@@ -84,6 +81,7 @@ export function Workspace({
         body: "{}",
       });
       if (!response.ok) throw new Error("Logout failed");
+      publishAuthChange();
       window.location.replace("/login");
     } catch {
       setNotice(
@@ -99,8 +97,23 @@ export function Workspace({
   const [invoices, setInvoices] = useState<Invoice[]>(initialData.invoices);
   const [numberingInvoices, setNumberingInvoices] = useState(initialData.numberingInvoices);
   const [customers, setCustomers] = useState(initialData.customers);
-  const [usedCustomerIds, setUsedCustomerIds] = useState(initialData.usedCustomerIds);
+  // REVISI : Kode manual tidak membutuhkan daftar counter di state UI.
+  // REVISI END
   const [saving, setSaving] = useState(false);
+  // REVISI : Pending delete bertahan setelah refresh dan finalisasi diminta saat tenggat.
+  const [pendingDeletes, setPendingDeletes] = useState(initialData.pendingDeletes ?? []);
+  useEffect(() => {
+    if (!pendingDeletes.length) return;
+    const deadline = Math.min(...pendingDeletes.map((item) => new Date(item.deadline).getTime()));
+    const timer = window.setTimeout(
+      () => {
+        void mutate("invoice.finalize", {});
+      },
+      Math.max(0, deadline - Date.now()) + 100,
+    );
+    return () => window.clearTimeout(timer);
+  }, [pendingDeletes]);
+  // REVISI END
   const savingRef = useRef(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [customerDeleteTarget, setCustomerDeleteTarget] = useState<Customer | null>(null);
@@ -202,7 +215,11 @@ export function Workspace({
       setNumberingInvoices(result.numberingInvoices);
       setCustomers(result.customers);
       setBusiness(result.business);
-      setUsedCustomerIds(result.usedCustomerIds);
+      // REVISI : Daftar counter tidak lagi digunakan untuk kode manual.
+      // REVISI END
+      // REVISI : Sinkronisasi notifikasi Undo setelah mutasi.
+      setPendingDeletes(result.pendingDeletes ?? []);
+      // REVISI END
       return true;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Data gagal disimpan.");
@@ -230,7 +247,9 @@ export function Workspace({
     const read = (key: string) => String(data.get(key) ?? "").trim();
 
     const customer: Customer = {
-      id: editingCustomer?.id ?? nextCustomerId(usedCustomerIds),
+      // REVISI : Kode customer diisi manual.
+      id: read("code").toUpperCase(),
+      // REVISI END
       name: read("name"),
       address: read("address"),
       city: read("city"),
@@ -238,7 +257,15 @@ export function Workspace({
       notes: read("notes"),
     };
 
-    if (await mutate("customer.save", { ...customer, existing: !!editingCustomer })) {
+    // REVISI : Kirim kode asli agar perubahan kode tetap menemukan UUID yang sama.
+    if (
+      await mutate("customer.save", {
+        ...customer,
+        originalCode: editingCustomer?.id,
+        existing: !!editingCustomer,
+      })
+    ) {
+      // REVISI END
       setCustomerEditor(false);
       setEditingCustomer(null);
       setNotice("Customer berhasil disimpan. Invoice lama tetap menyimpan identitas sebelumnya.");
@@ -246,10 +273,8 @@ export function Workspace({
   }
 
   function openCustomerEditor(customer: Customer | null = null) {
-    if (!customer && usedCustomerIds.includes("4199")) {
-      setNotice("ID customer 4101–4199 sudah habis.");
-      return;
-    }
+    // REVISI : Hilangkan batas customer 4199.
+    // REVISI END
     setEditingCustomer(customer);
     setCustomerEditor(true);
   }
@@ -269,7 +294,9 @@ export function Workspace({
 
     if (await mutate("invoice.delete", { id: deleteTarget.id })) {
       setDeleteTarget(null);
-      setNotice("Invoice berhasil dihapus.");
+      // REVISI : Gunakan toast Undo 5 detik, bukan sukses permanen 2 detik.
+      setNotice("");
+      // REVISI END
     }
   }
 
@@ -401,7 +428,25 @@ export function Workspace({
           </div>
         </header>
         <main>
-          <SessionActivity />
+          <SessionActivity userEmail={userEmail} />
+          {/* REVISI : Floating Undo terpisah dari notifikasi sukses biasa. */}
+          {pendingDeletes.length > 0 && (
+            <div className="notice workspace-toast undo-toast" role="status">
+              <span>
+                {pendingDeletes[0].number} —{" "}
+                {language === "en" ? "Undo within 5 seconds" : "Undo dalam 5 detik"}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={saving}
+                onClick={() => void mutate("invoice.undo", { id: pendingDeletes[0].id })}
+              >
+                Undo
+              </Button>
+            </div>
+          )}
+          {/* REVISI END */}
           {notice && (
             <div className="notice workspace-toast" role="status" aria-live="polite">
               <span>{t(notice)}</span>
@@ -694,7 +739,15 @@ export function Workspace({
           <form className="customer-form" onSubmit={saveCustomer}>
             <label>
               {t("ID Customer")}
-              <input disabled value={editingCustomer?.id ?? nextCustomerId(usedCustomerIds)} />
+              {/* REVISI : Input kode manual maksimal 10 karakter. */}
+              <input
+                name="code"
+                required
+                maxLength={10}
+                pattern="[A-Za-z0-9_-]{1,10}"
+                defaultValue={editingCustomer?.id ?? ""}
+              />
+              {/* REVISI END */}
             </label>
             <label>
               {t("Nama")}
@@ -814,7 +867,11 @@ export function Workspace({
           <div className="delete-confirmation">
             <p>
               {t("Hapus")} <strong>{deleteTarget.number}</strong> {t("untuk")} {deleteTarget.client}
-              ? {t("Tindakan ini tidak dapat dibatalkan.")}
+              {/* REVISI : Jelaskan batas pembatalan sebelum hard delete. */}?{" "}
+              {language === "en"
+                ? "You have 5 seconds to Undo before permanent deletion."
+                : "Kamu punya 5 detik untuk Undo sebelum dihapus permanen."}
+              {/* REVISI END */}
             </p>
             <div>
               <Button variant="outline" onClick={() => setDeleteTarget(null)}>

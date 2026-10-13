@@ -4,8 +4,14 @@ import type { Invoice } from "@/lib/invoice";
 import { initialBusiness } from "@/lib/business";
 import { privateImageUrl } from "@/lib/private-image";
 import type { RecordInfo } from "@/lib/record-info";
+// REVISI : Finalisasi penghapusan tertunda saat workspace dimuat.
+import { cleanupInvoiceDeletes } from "@/lib/invoice-deletion";
+// REVISI END
 
 export async function loadWorkspace(userId: string) {
+  // REVISI : Cleanup server bertahan meskipun browser ditutup.
+  await cleanupInvoiceDeletes(userId);
+  // REVISI END
   const db = getDatabase();
   // Only resolve the authenticated owner's identity; never expose other accounts.
   const owner = await db.user.findUnique({ where: { id: userId }, select: { email: true } });
@@ -26,7 +32,9 @@ export async function loadWorkspace(userId: string) {
     db.accountCustomer.findMany({ where: { userId, deletedAt: null }, orderBy: { code: "asc" } }),
     db.accountInvoice.findMany({
       where: { userId },
-      include: { items: { orderBy: { position: "asc" } } },
+      // REVISI : Lookup customer terbaru melalui UUID setelah kode diganti.
+      include: { customer: true, items: { orderBy: { position: "asc" } } },
+      // REVISI END
       orderBy: [{ issuedAt: "desc" }, { createdAt: "desc" }],
     }),
     db.accountSettings.findUnique({ where: { userId } }),
@@ -36,7 +44,9 @@ export async function loadWorkspace(userId: string) {
     info: recordInfo(record),
     id: record.id,
     number: record.number,
-    customerId: record.customerCode,
+    // REVISI : Gunakan kode aktif untuk pilihan form, snapshot cetak tetap dipertahankan.
+    customerId: record.customer.deletedAt ? record.customerCode : record.customer.code,
+    // REVISI END
     client: record.customerName,
     email: record.customerContact,
     address: record.customerAddress,
@@ -64,7 +74,18 @@ export async function loadWorkspace(userId: string) {
       notes: record.notes,
       info: recordInfo(record),
     })),
-    invoices: invoices.filter((_, index) => !records[index].deletedAt),
+    // REVISI : Sembunyikan invoice pending; nomor tetap dicadangkan selama Undo.
+    invoices: invoices.filter(
+      (_, index) => !records[index].deletedAt && !records[index].deleteAfter,
+    ),
+    pendingDeletes: records
+      .filter((record) => record.deleteAfter)
+      .map((record) => ({
+        id: record.id,
+        number: record.number,
+        deadline: record.deleteAfter!.toISOString(),
+      })),
+    // REVISI END
     numberingInvoices: invoices,
     business: settings
       ? {

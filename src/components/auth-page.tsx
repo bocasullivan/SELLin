@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { LanguageSelector } from "@/components/language-selector";
 import { useLanguage } from "@/components/language-provider";
 import { useRouter } from "next/navigation";
+import { publishAuthChange } from "@/lib/auth-sync";
 
 export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const { language } = useLanguage();
@@ -105,6 +106,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
       if (registering) {
         setRegistered(true);
       } else {
+        publishAuthChange();
         // Full navigation discards cached dashboard data from any prior user.
         window.location.replace("/");
       }

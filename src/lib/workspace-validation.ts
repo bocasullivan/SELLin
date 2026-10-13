@@ -25,7 +25,9 @@ export function customerData(input: Record<string, unknown>) {
 }
 
 export function invoiceData(input: Record<string, unknown>) {
-  const customerCode = text(input, "customerId", 4, true);
+  // REVISI : Terima kode customer manual hingga 10 karakter.
+  const customerCode = text(input, "customerId", 10, true);
+  // REVISI END
   const issued = text(input, "issued", 10, true);
   const date = new Date(`${issued}T00:00:00Z`);
   if (

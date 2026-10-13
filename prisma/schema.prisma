@@ -42,9 +42,11 @@ model AccountCounter {
 }
 
 model AccountCustomer {
+  // REVISI : Kode customer manual maksimal 10 karakter.
   id        String    @id @default(uuid()) @db.Uuid
   userId    String    @db.Uuid
-  code      String    @db.VarChar(4)
+  code      String    @db.VarChar(10)
+  // REVISI END
   name      String    @db.VarChar(100)
   address   String    @default("") @db.VarChar(500)
   city      String    @default("") @db.VarChar(100)
@@ -75,6 +77,7 @@ model AccountSequence {
 }
 
 model AccountInvoice {
+  // REVISI : Snapshot kode fleksibel dan tenggat Undo server.
   id              String        @id @default(uuid()) @db.Uuid
   userId          String        @db.Uuid
   customerId      String        @db.Uuid
@@ -83,7 +86,9 @@ model AccountInvoice {
   sequence        Int
   issuedAt        DateTime      @db.Date
   status          InvoiceStatus @default(UNPAID)
-  customerCode    String        @db.VarChar(4)
+  customerCode    String        @db.VarChar(10)
+  deleteAfter     DateTime?
+  // REVISI END
   customerName    String        @db.VarChar(100)
   customerAddress String        @db.VarChar(700)
   customerContact String        @db.VarChar(150)
@@ -100,7 +105,9 @@ model AccountInvoice {
   items           AccountItem[]
 
   @@unique([userId, number])
-  @@unique([userId, customerId, year, sequence])
+  // REVISI : Urutan tahunan gabungan seluruh customer.
+  @@unique([userId, year, sequence])
+  // REVISI END
   @@index([userId, deletedAt, issuedAt])
 }
 

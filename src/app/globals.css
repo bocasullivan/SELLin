@@ -21,6 +21,11 @@
   display: flex;
   flex-direction: column;
 }
+/* REVISI : Pisahkan posisi toast Undo agar tidak bertumpuk dengan toast biasa. */
+.notice.workspace-toast.undo-toast {
+  top: 84px;
+}
+/* REVISI END */
 .notice.workspace-toast {
   position: fixed;
   top: 24px;

@@ -5,6 +5,9 @@ import { loadWorkspace } from "@/lib/workspace-data";
 import { customerData, invoiceData, text, WorkspaceError } from "@/lib/workspace-validation";
 import { decodePrivateImage } from "@/lib/private-image";
 import { diffFields, invoiceAuditSnapshot, jsonSafe } from "@/lib/audit";
+// REVISI : Cleanup invoice dalam transaksi mutasi akun.
+import { finalizeInvoiceDeletes } from "@/lib/invoice-deletion";
+// REVISI END
 
 export const runtime = "nodejs";
 const json = (data: object, status = 200) =>
@@ -35,25 +38,46 @@ export async function POST(request: Request) {
     // Serialize mutations per account: protects counters and item replacement.
     await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${userId}::uuid FOR UPDATE`;
+      // REVISI : Hard delete final sebelum mengalokasikan nomor atau menerima Undo.
+      await finalizeInvoiceDeletes(tx, userId);
+      if (action === "invoice.finalize") return;
+      // REVISI END
       if (action === "customer.save") {
         const values = customerData(data);
+        // REVISI : Kode manual unik per akun; gunakan kode lama untuk lookup saat edit.
+        const code = text(data, "id", 10, true).toUpperCase();
+        if (!/^[A-Z0-9_-]{1,10}$/.test(code))
+          throw new WorkspaceError("Kode customer maksimal 10 karakter: huruf, angka, - atau _.");
+        const lookupCode = data.existing ? text(data, "originalCode", 10, true) : code;
+        const duplicate = await tx.accountCustomer.findFirst({ where: { userId, code } });
+        if (duplicate && (!data.existing || duplicate.code !== lookupCode))
+          throw new WorkspaceError("Kode customer sudah digunakan.", 409);
+        const customerValues = { ...values, code };
+        // REVISI END
         if (data.existing) {
           const previous = await tx.accountCustomer.findFirst({
-            where: { userId, code: String(data.id), deletedAt: null },
+            // REVISI : Lookup identitas sebelum kode diedit.
+            where: { userId, code: lookupCode, deletedAt: null },
+            // REVISI END
           });
           if (!previous) throw new WorkspaceError("Customer tidak ditemukan.", 404);
-          const changes = diffFields(previous, values, {
+          // REVISI : Audit perubahan kode customer.
+          const changes = diffFields(previous, customerValues, {
+            code: "Kode customer",
             name: "Nama",
             address: "Alamat",
             city: "Kota",
             contact: "Kontak",
             notes: "Catatan",
           });
+          // REVISI END
           if (changes.length) {
             const after = await tx.accountCustomer.update({
               where: { id: previous.id },
               data: {
-                ...values,
+                // REVISI : Simpan kode baru tanpa mengubah UUID atau snapshot invoice lama.
+                ...customerValues,
+                // REVISI END
                 version: { increment: 1 },
                 updatedByUserId: userId,
               },
@@ -71,22 +95,17 @@ export async function POST(request: Request) {
             });
           }
         } else {
-          const counter = await tx.accountCounter.upsert({
-            where: { userId },
-            create: { userId, lastCode: 4101 },
-            update: { lastCode: { increment: 1 } },
-          });
-          if (counter.lastCode > 4199)
-            throw new WorkspaceError("ID customer 4101–4199 sudah habis.");
+          // REVISI : Customer baru tidak lagi memakai counter 4101-4199.
           const created = await tx.accountCustomer.create({
             data: {
               userId,
-              code: String(counter.lastCode),
+              code,
               createdByUserId: userId,
               updatedByUserId: userId,
               ...values,
             },
           });
+          // REVISI END
           await tx.auditTrail.create({
             data: {
               userId,
@@ -120,38 +139,37 @@ export async function POST(request: Request) {
             entityId: deleted.id,
             version: deleted.version,
             action: "DELETE",
-            changes: [{ field: "deletedAt", label: "Customer", before: null, after: deleted.deletedAt }],
+            changes: [
+              { field: "deletedAt", label: "Customer", before: null, after: deleted.deletedAt },
+            ],
           },
         });
-      } else if (action === "invoice.save" || action === "invoice.delete") {
+        // REVISI : Pending delete dan Undo server, maksimal 5 detik.
+      } else if (["invoice.save", "invoice.delete", "invoice.undo"].includes(action)) {
         const id = text(data, "id", 36, true);
         if (!/^[a-f0-9-]{36}$/i.test(id)) throw new WorkspaceError("ID invoice tidak valid.");
-          const previous = await tx.accountInvoice.findFirst({
-            where: { id, userId, deletedAt: null },
-            include: { items: { orderBy: { position: "asc" } } },
-          });
+        const previous = await tx.accountInvoice.findFirst({
+          where: { id, userId, deletedAt: null },
+          include: { items: { orderBy: { position: "asc" } } },
+        });
         if (action === "invoice.delete") {
           if (!previous) throw new WorkspaceError("Invoice tidak ditemukan.", 404);
-          const deleted = await tx.accountInvoice.update({
+          if (previous.deleteAfter)
+            throw new WorkspaceError("Invoice sudah menunggu penghapusan.", 409);
+          await tx.accountInvoice.update({
             where: { id },
-            data: {
-              deletedAt: new Date(),
-              version: { increment: 1 },
-              updatedByUserId: userId,
-            },
+            data: { deleteAfter: new Date(Date.now() + 5000), updatedAt: previous.updatedAt },
           });
-          await tx.auditTrail.create({
-            data: {
-              userId,
-              actorUserId: userId,
-              entityType: "INVOICE",
-              entityId: deleted.id,
-              version: deleted.version,
-              action: "DELETE",
-              changes: [{ field: "deletedAt", label: "Invoice", before: null, after: deleted.deletedAt }],
-            },
+        } else if (action === "invoice.undo") {
+          if (!previous?.deleteAfter || previous.deleteAfter.getTime() <= Date.now())
+            throw new WorkspaceError("Waktu Undo sudah habis.", 409);
+          await tx.accountInvoice.update({
+            where: { id },
+            data: { deleteAfter: null, updatedAt: previous.updatedAt },
           });
         } else {
+          if (previous?.deleteAfter) throw new WorkspaceError("Invoice menunggu penghapusan.", 409);
+          // REVISI END
           if (data.existing && !previous) throw new WorkspaceError("Invoice tidak ditemukan.", 404);
           const values = invoiceData(data);
           const customer = await tx.accountCustomer.findFirst({
@@ -161,22 +179,25 @@ export async function POST(request: Request) {
           if (!customer && (!previous || previous.customerCode !== values.customerCode))
             throw new WorkspaceError("Pilih customer yang aktif.");
           const customerId = customer?.id ?? previous!.customerId;
-          let sequence = previous?.sequence ?? 0;
-          if (!previous || previous.customerId !== customerId || previous.year !== values.year) {
-            const counter = await tx.accountSequence.upsert({
-              where: { userId_customerId_year: { userId, customerId, year: values.year } },
-              create: { userId, customerId, year: values.year, lastNumber: 1 },
-              update: { lastNumber: { increment: 1 } },
-            });
-            sequence = counter.lastNumber;
-            if (sequence > 99999) throw new WorkspaceError("Nomor urut invoice sudah habis.");
-          }
+          // REVISI : Nomor terbesar tersisa per akun/tahun + 1; edit mempertahankan nomor.
+          const largest = previous
+            ? null
+            : await tx.accountInvoice.aggregate({
+                where: { userId, year: values.year },
+                _max: { sequence: true },
+              });
+          const sequence = previous?.sequence ?? (largest?._max.sequence ?? 0) + 1;
+          if (sequence > 999999) throw new WorkspaceError("Nomor urut invoice sudah habis.");
+          // REVISI END
           const sameCustomer = previous?.customerId === customerId;
-            const record = {
+          const record = {
             userId,
             customerId,
-            number: `INV${String(values.year).slice(-2)}${values.customerCode}${String(sequence).padStart(5, "0")}`,
-            year: values.year,
+            // REVISI : Identitas invoice tahunan stabil.
+            number:
+              previous?.number ??
+              `INV${String(values.year).slice(-2)}${String(sequence).padStart(6, "0")}`,
+            year: previous?.year ?? values.year,
             sequence,
             issuedAt: values.date,
             status: values.status,
@@ -188,8 +209,9 @@ export async function POST(request: Request) {
               ? previous!.customerAddress
               : [customer!.address, customer!.city].filter(Boolean).join(", "),
             customerContact: sameCustomer ? previous!.customerContact : customer!.contact,
-            createdByUserId: userId,
+            createdByUserId: previous?.createdByUserId ?? userId,
             updatedByUserId: userId,
+            // REVISI END
           };
           if (previous) {
             const nextSnapshot = invoiceAuditSnapshot({ ...record, items: values.items });
@@ -238,7 +260,14 @@ export async function POST(request: Request) {
                 entityId: created.id,
                 version: created.version,
                 action: "CREATE",
-                changes: jsonSafe([{ field: "record", label: "Data invoice", before: null, after: invoiceAuditSnapshot({ ...record, items: values.items }) }]),
+                changes: jsonSafe([
+                  {
+                    field: "record",
+                    label: "Data invoice",
+                    before: null,
+                    after: invoiceAuditSnapshot({ ...record, items: values.items }),
+                  },
+                ]),
               },
             });
           }
@@ -272,7 +301,14 @@ export async function POST(request: Request) {
               entityId: userId,
               version: updated.version,
               action: "UPDATE",
-              changes: jsonSafe([{ field: kind, label: kind === "logo" ? "Logo" : "Tanda tangan", before: previous[kind], after: value ? "updated" : "removed" }]),
+              changes: jsonSafe([
+                {
+                  field: kind,
+                  label: kind === "logo" ? "Logo" : "Tanda tangan",
+                  before: previous[kind],
+                  after: value ? "updated" : "removed",
+                },
+              ]),
             },
           });
         }
@@ -305,7 +341,15 @@ export async function POST(request: Request) {
         });
         if (changes.length) {
           await tx.auditTrail.create({
-              data: { userId, actorUserId: userId, entityType: "SETTINGS", entityId: userId, version: updated.version, action: "UPDATE", changes: jsonSafe(changes) },
+            data: {
+              userId,
+              actorUserId: userId,
+              entityType: "SETTINGS",
+              entityId: userId,
+              version: updated.version,
+              action: "UPDATE",
+              changes: jsonSafe(changes),
+            },
           });
         }
       } else throw new WorkspaceError("Operasi tidak tersedia.");
